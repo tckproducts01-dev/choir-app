@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Edit {{ song[1] }}</title>
+</head>
+<body>
+    <h1>Edit Song</h1>
+    <form method="post" action="/admin/songs/{{ song[0] }}/edit">
+        <label for="title">Title:</label><br>
+        <input type="text" id="title" name="title" value="{{ song[1] }}" required><br><br>
+
+        <label for="lyrics">Lyrics:</label><br>
+        <textarea id="lyrics" name="lyrics" rows="20" cols="80" required>{{ song[2] }}</textarea><br><br>
+
+        <button type="submit">💾 Save</button>
+    </form>
+    <br>
+    <a href="/admin/songs/{{ song[0] }}">⬅ Cancel</a>
+</body>
+</html>

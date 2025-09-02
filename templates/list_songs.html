@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>All Songs</title>
+</head>
+<body>
+    <h1>🎵 Songs in Database</h1>
+    <ul>
+        {% for song in songs %}
+            <li>
+                <a href="/admin/songs/{{ song[0] }}">
+                    {{ song[1] }}
+                </a>
+            </li>
+        {% endfor %}
+    </ul>
+    <a href="/admin/add-song">➕ Add another song</a>
+</body>
+</html>
