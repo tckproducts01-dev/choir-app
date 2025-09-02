@@ -1,0 +1,26 @@
+<!-- templates/songs.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>All Songs</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        h1 { color: #333; }
+        a { text-decoration: none; color: #4CAF50; margin-right: 10px; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>All Songs</h1>
+    <a href="/">🏠 Home</a> | <a href="/admin/add-song">➕ Add New Song</a>
+    <ul>
+        {% for song in songs %}
+        <li>
+            <a href="/admin/songs/{{ song[0] }}">{{ song[1] }}</a> |
+            <a href="/admin/songs/{{ song[0] }}/edit">✏ Edit</a> |
+            <a href="/admin/songs/{{ song[0] }}/delete" onclick="return confirm('Are you sure?');">🗑 Delete</a>
+        </li>
+        {% endfor %}
+    </ul>
+</body>
+</html>
