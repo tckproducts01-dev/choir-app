@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>{{ title or "Choir Admin" }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 24px; }
+    header { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; }
+    a { text-decoration: none; color: #1f5fbf; }
+    .btn { display:inline-block; padding:8px 12px; border-radius:10px; border:1px solid #ddd; }
+    input, textarea { width:100%; box-sizing:border-box; padding:8px; border-radius:8px; border:1px solid #ccc; }
+    table { width:100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid #eee; text-align: left; padding: 8px; }
+    .row { display:grid; gap:12px; grid-template-columns: 1fr; max-width: 900px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1 style="margin:0;">🎶 Choir Admin</h1>
+    <nav style="margin-left:auto; display:flex; gap:10px;">
+      <a class="btn" href="/admin">Songs</a>
+      <a class="btn" href="/admin/add">Add Song</a>
+      <a class="btn" href="/">API</a>
+    </nav>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>All Songs</h2>
+<p><a class="btn" href="/admin/add">+ Add Song</a></p>
+<table>
+  <tr><th>Title</th><th>Actions</th></tr>
+  {% for s in songs %}
+  <tr>
+    <td style="width:70%;">{{ s.title }}</td>
+    <td>
+      <a class="btn" href="/admin/edit/{{ s.id }}">Edit</a>
+      <form method="post" action="/admin/delete/{{ s.id }}" style="display:inline-block;margin-left:6px;">
+        <button class="btn" onclick="return confirm('Delete {{ s.title }}?')">Delete</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+  {% if songs|length == 0 %}
+  <tr><td colspan="2">No songs yet. Click “Add Song”.</td></tr>
+  {% endif %}
+</table>
+{% endblock %}
