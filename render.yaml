@@ -2,9 +2,13 @@ services:
   - type: web
     name: choir-app
     env: python
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port 10000
+    envVars:
+      - key: DATABASE_PATH
+        value: /songs.db
     disk:
-      name: choir-data
-      mountPath: /opt/render/project/src/data
+      name: choir-disk
+      mountPath: /
       sizeGB: 1
