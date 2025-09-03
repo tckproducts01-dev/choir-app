@@ -2,14 +2,27 @@ from fastapi import FastAPI, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 import sqlite3
+import os
 from starlette.status import HTTP_303_SEE_OTHER
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
-# Initialize database
+# ------------------------
+# Database setup
+# ------------------------
+# Persistent path: "data/" (works locally and on Render)
+BASE_DIR = os.path.dirname(__file__)
+DATA_DIR = os.path.join(BASE_DIR, "data")
+os.makedirs(DATA_DIR, exist_ok=True)
+
+DB_PATH = os.path.join(DATA_DIR, "songs.db")
+
+def get_connection():
+    return sqlite3.connect(DB_PATH)
+
 def init_db():
-    conn = sqlite3.connect("songs.db")
+    conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS songs (
@@ -35,7 +48,7 @@ async def home(request: Request):
 # ------------------------
 @app.get("/admin/songs", response_class=HTMLResponse)
 async def list_songs(request: Request):
-    conn = sqlite3.connect("songs.db")
+    conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id, title FROM songs ORDER BY id DESC")
     songs = cursor.fetchall()
@@ -51,7 +64,7 @@ async def add_song_form(request: Request):
 
 @app.post("/admin/add-song")
 async def add_song(title: str = Form(...), lyrics: str = Form(...)):
-    conn = sqlite3.connect("songs.db")
+    conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("INSERT INTO songs (title, lyrics) VALUES (?, ?)", (title, lyrics))
     conn.commit()
@@ -63,7 +76,7 @@ async def add_song(title: str = Form(...), lyrics: str = Form(...)):
 # ------------------------
 @app.get("/admin/songs/{song_id}", response_class=HTMLResponse)
 async def view_song(request: Request, song_id: int):
-    conn = sqlite3.connect("songs.db")
+    conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id, title, lyrics FROM songs WHERE id = ?", (song_id,))
     song = cursor.fetchone()
@@ -77,7 +90,7 @@ async def view_song(request: Request, song_id: int):
 # ------------------------
 @app.get("/admin/songs/{song_id}/edit", response_class=HTMLResponse)
 async def edit_song_form(request: Request, song_id: int):
-    conn = sqlite3.connect("songs.db")
+    conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id, title, lyrics FROM songs WHERE id = ?", (song_id,))
     song = cursor.fetchone()
@@ -88,7 +101,7 @@ async def edit_song_form(request: Request, song_id: int):
 
 @app.post("/admin/songs/{song_id}/edit")
 async def edit_song(song_id: int, title: str = Form(...), lyrics: str = Form(...)):
-    conn = sqlite3.connect("songs.db")
+    conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("UPDATE songs SET title=?, lyrics=? WHERE id=?", (title, lyrics, song_id))
     conn.commit()
@@ -100,7 +113,7 @@ async def edit_song(song_id: int, title: str = Form(...), lyrics: str = Form(...
 # ------------------------
 @app.get("/admin/songs/{song_id}/delete")
 async def delete_song(song_id: int):
-    conn = sqlite3.connect("songs.db")
+    conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM songs WHERE id=?", (song_id,))
     conn.commit()
