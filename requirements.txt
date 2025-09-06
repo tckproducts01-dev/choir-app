@@ -3,3 +3,5 @@ uvicorn
 jinja2
 python-multipart
 starlette
+sqlalchemy
+psycopg2-binary

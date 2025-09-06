@@ -1,121 +1,116 @@
-from fastapi import FastAPI, Request, Form, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
-import sqlite3
 import os
-from starlette.status import HTTP_303_SEE_OTHER
+from fastapi import FastAPI, Form, Request
+from fastapi.responses import RedirectResponse
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy import create_engine, Column, Integer, String, Text
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 
+# --------------------------------------------------
+# Database Setup
+# --------------------------------------------------
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "sqlite:///./songs.db"  # fallback for local dev
+)
+
+# Ensure compatibility with psycopg on Render
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+
+class Song(Base):
+    __tablename__ = "songs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    lyrics = Column(Text, nullable=False)
+
+
+# Create tables if they don’t exist
+Base.metadata.create_all(bind=engine)
+
+# --------------------------------------------------
+# FastAPI App
+# --------------------------------------------------
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# ------------------------
-# Database setup
-# ------------------------
-# Persistent path: "data/" (works locally and on Render)
-BASE_DIR = os.path.dirname(__file__)
-DATA_DIR = os.path.join(BASE_DIR, "data")
-os.makedirs(DATA_DIR, exist_ok=True)
 
-DB_PATH = os.path.join(DATA_DIR, "songs.db")
+# Dependency: get DB session
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
-def get_connection():
-    return sqlite3.connect(DB_PATH)
 
-def init_db():
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS songs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            lyrics TEXT NOT NULL
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-init_db()
-
-# ------------------------
-# Home page
-# ------------------------
-@app.get("/", response_class=HTMLResponse)
+# --------------------------------------------------
+# Routes
+# --------------------------------------------------
+@app.get("/")
 async def home(request: Request):
-    return templates.TemplateResponse("home.html", {"request": request})
+    return templates.TemplateResponse("index.html", {"request": request})
 
-# ------------------------
-# List all songs
-# ------------------------
-@app.get("/admin/songs", response_class=HTMLResponse)
+
+@app.get("/admin/songs")
 async def list_songs(request: Request):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, title FROM songs ORDER BY id DESC")
-    songs = cursor.fetchall()
-    conn.close()
-    return templates.TemplateResponse("songs.html", {"request": request, "songs": songs})
+    db = next(get_db())
+    songs = db.query(Song).all()
+    return templates.TemplateResponse("list_songs.html", {"request": request, "songs": songs})
 
-# ------------------------
-# Add new song
-# ------------------------
-@app.get("/admin/add-song", response_class=HTMLResponse)
+
+@app.get("/admin/songs/{song_id}")
+async def view_song(song_id: int, request: Request):
+    db = next(get_db())
+    song = db.query(Song).filter(Song.id == song_id).first()
+    return templates.TemplateResponse("view_song.html", {"request": request, "song": song})
+
+
+@app.get("/admin/songs/{song_id}/edit")
+async def edit_song(song_id: int, request: Request):
+    db = next(get_db())
+    song = db.query(Song).filter(Song.id == song_id).first()
+    return templates.TemplateResponse("edit_song.html", {"request": request, "song": song})
+
+
+@app.post("/admin/songs/{song_id}/edit")
+async def update_song(song_id: int, title: str = Form(...), lyrics: str = Form(...)):
+    db = next(get_db())
+    song = db.query(Song).filter(Song.id == song_id).first()
+    if song:
+        song.title = title
+        song.lyrics = lyrics
+        db.commit()
+    return RedirectResponse(url=f"/admin/songs/{song_id}", status_code=303)
+
+
+@app.get("/admin/songs/{song_id}/delete")
+async def delete_song(song_id: int):
+    db = next(get_db())
+    song = db.query(Song).filter(Song.id == song_id).first()
+    if song:
+        db.delete(song)
+        db.commit()
+    return RedirectResponse(url="/admin/songs", status_code=303)
+
+
+@app.get("/admin/add-song")
 async def add_song_form(request: Request):
     return templates.TemplateResponse("add_song.html", {"request": request})
 
+
 @app.post("/admin/add-song")
 async def add_song(title: str = Form(...), lyrics: str = Form(...)):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO songs (title, lyrics) VALUES (?, ?)", (title, lyrics))
-    conn.commit()
-    conn.close()
-    return RedirectResponse(url="/admin/songs", status_code=HTTP_303_SEE_OTHER)
-
-# ------------------------
-# View song lyrics
-# ------------------------
-@app.get("/admin/songs/{song_id}", response_class=HTMLResponse)
-async def view_song(request: Request, song_id: int):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, title, lyrics FROM songs WHERE id = ?", (song_id,))
-    song = cursor.fetchone()
-    conn.close()
-    if not song:
-        raise HTTPException(status_code=404, detail="Song not found")
-    return templates.TemplateResponse("view_song.html", {"request": request, "song": song})
-
-# ------------------------
-# Edit song
-# ------------------------
-@app.get("/admin/songs/{song_id}/edit", response_class=HTMLResponse)
-async def edit_song_form(request: Request, song_id: int):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, title, lyrics FROM songs WHERE id = ?", (song_id,))
-    song = cursor.fetchone()
-    conn.close()
-    if not song:
-        raise HTTPException(status_code=404, detail="Song not found")
-    return templates.TemplateResponse("edit_song.html", {"request": request, "song": song})
-
-@app.post("/admin/songs/{song_id}/edit")
-async def edit_song(song_id: int, title: str = Form(...), lyrics: str = Form(...)):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE songs SET title=?, lyrics=? WHERE id=?", (title, lyrics, song_id))
-    conn.commit()
-    conn.close()
-    return RedirectResponse(url=f"/admin/songs/{song_id}", status_code=HTTP_303_SEE_OTHER)
-
-# ------------------------
-# Delete song
-# ------------------------
-@app.get("/admin/songs/{song_id}/delete")
-async def delete_song(song_id: int):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM songs WHERE id=?", (song_id,))
-    conn.commit()
-    conn.close()
-    return RedirectResponse(url="/admin/songs", status_code=HTTP_303_SEE_OTHER)
+    db = next(get_db())
+    new_song = Song(title=title, lyrics=lyrics)
+    db.add(new_song)
+    db.commit()
+    return RedirectResponse(url="/admin/songs", status_code=303)
