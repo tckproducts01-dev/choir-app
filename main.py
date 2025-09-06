@@ -1,89 +1,107 @@
-﻿from fastapi import FastAPI, Request, Form
-from fastapi.responses import RedirectResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
+﻿import os
+from fastapi import FastAPI, Request, Depends, Form
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine, Column, Integer, String, Text
-from sqlalchemy.orm import sessionmaker, declarative_base
-import os
+from sqlalchemy.exc import SQLAlchemyError, ArgumentError
+from sqlalchemy.orm import sessionmaker, declarative_base, Session
 
-app = FastAPI()
-
-# ========================
-# Database Setup
-# ========================
+# -----------------------
+# Environment + DB Config
+# -----------------------
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Fix Render's postgres:// → postgresql://
-if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+engine = None
+SessionLocal = None
+db_error = None
 
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+try:
+    if not DATABASE_URL:
+        raise ValueError("DATABASE_URL environment variable not set")
+    engine = create_engine(DATABASE_URL)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+except (ArgumentError, ValueError) as e:
+    db_error = f"❌ Database configuration error: {e}"
+except Exception as e:
+    db_error = f"❌ Unexpected error while setting up DB: {e}"
+
 Base = declarative_base()
 
-
+# -----------------------
+# Models
+# -----------------------
 class Song(Base):
     __tablename__ = "songs"
-
     id = Column(Integer, primary_key=True, index=True)
-    title = Column(String(255), nullable=False)
+    title = Column(String(200), nullable=False)
     lyrics = Column(Text, nullable=False)
 
+# Create tables only if DB works
+if engine and not db_error:
+    try:
+        Base.metadata.create_all(bind=engine)
+    except SQLAlchemyError as e:
+        db_error = f"❌ Failed to create tables: {e}"
 
-# Create tables on startup
-Base.metadata.create_all(bind=engine)
-
-# ========================
-# Templates & Static
-# ========================
+# -----------------------
+# FastAPI setup
+# -----------------------
+app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+# -----------------------
+# Dependency
+# -----------------------
+def get_db():
+    if not SessionLocal:
+        raise RuntimeError("Database is not available")
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
-# ========================
+# -----------------------
 # Routes
-# ========================
-@app.get("/")
-def home(request: Request):
-    db = SessionLocal()
-    songs = db.query(Song).all()
-    db.close()
-    return templates.TemplateResponse("index.html", {"request": request, "songs": songs})
+# -----------------------
+@app.get("/", response_class=HTMLResponse)
+def home(request: Request, db: Session = Depends(get_db)):
+    songs = db.query(Song).all() if not db_error else []
+    return templates.TemplateResponse(
+        "index.html",
+        {"request": request, "songs": songs, "db_error": db_error},
+    )
 
-
-@app.get("/songs/new")
-def new_song_form(request: Request):
-    return templates.TemplateResponse("add_song.html", {"request": request})
-
-
-@app.post("/songs")
-def add_song(title: str = Form(...), lyrics: str = Form(...)):
-    db = SessionLocal()
+@app.post("/add", response_class=HTMLResponse)
+def add_song(
+    request: Request,
+    title: str = Form(...),
+    lyrics: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    if db_error:
+        return templates.TemplateResponse(
+            "index.html",
+            {"request": request, "songs": [], "db_error": db_error},
+        )
     new_song = Song(title=title, lyrics=lyrics)
     db.add(new_song)
     db.commit()
-    db.refresh(new_song)
-    db.close()
-    return RedirectResponse(url="/", status_code=303)
+    songs = db.query(Song).all()
+    return templates.TemplateResponse(
+        "index.html",
+        {"request": request, "songs": songs, "db_error": None},
+    )
 
-
-@app.get("/songs/{song_id}")
-def view_song(song_id: int, request: Request):
-    db = SessionLocal()
-    song = db.query(Song).filter(Song.id == song_id).first()
-    db.close()
-    return templates.TemplateResponse("song_detail.html", {"request": request, "song": song})
-
-
-# ========================
-# Health Check Route
-# ========================
 @app.get("/health")
-def health_check():
+def health():
+    if db_error:
+        return {"status": "error", "message": db_error}
     try:
-        db = SessionLocal()
-        db.execute("SELECT 1")
-        db.close()
-        return JSONResponse(content={"status": "ok"})
+        with engine.connect() as conn:
+            conn.execute("SELECT 1")
+        return {"status": "ok", "message": "Database connected"}
     except Exception as e:
-        return JSONResponse(content={"status": "error", "detail": str(e)}, status_code=500)
+        return {"status": "error", "message": str(e)}
