@@ -1,67 +1,75 @@
-﻿from fastapi import FastAPI, Request, Form, Depends
+﻿from fastapi import FastAPI, Request, Form
 from fastapi.responses import RedirectResponse
-from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from sqlalchemy import create_engine, Column, Integer, String, Text
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import sessionmaker, declarative_base
 import os
 
-# Load DATABASE_URL from environment (Render → Environment)
+app = FastAPI()
+
+# ========================
+# Database Setup
+# ========================
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# SQLAlchemy setup
+# Fix Render's postgres:// → postgresql://
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-# Define Song model
+
 class Song(Base):
     __tablename__ = "songs"
+
     id = Column(Integer, primary_key=True, index=True)
-    title = Column(String(200), nullable=False)
+    title = Column(String(255), nullable=False)
     lyrics = Column(Text, nullable=False)
 
-# Create tables if not exist
+
+# Create tables on startup
 Base.metadata.create_all(bind=engine)
 
-# FastAPI setup
-app = FastAPI()
+# ========================
+# Templates & Static
+# ========================
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Dependency for DB session
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
-# Home - list songs
+# ========================
+# Routes
+# ========================
 @app.get("/")
-def home(request: Request, db: Session = Depends(get_db)):
+def home(request: Request):
+    db = SessionLocal()
     songs = db.query(Song).all()
+    db.close()
     return templates.TemplateResponse("index.html", {"request": request, "songs": songs})
 
-# Add new song
-@app.post("/add")
-def add_song(
-    request: Request,
-    title: str = Form(...),
-    lyrics: str = Form(...),
-    db: Session = Depends(get_db)
-):
+
+@app.get("/songs/new")
+def new_song_form(request: Request):
+    return templates.TemplateResponse("add_song.html", {"request": request})
+
+
+@app.post("/songs")
+def add_song(title: str = Form(...), lyrics: str = Form(...)):
+    db = SessionLocal()
     new_song = Song(title=title, lyrics=lyrics)
     db.add(new_song)
     db.commit()
     db.refresh(new_song)
-    return RedirectResponse("/", status_code=303)
+    db.close()
+    return RedirectResponse(url="/", status_code=303)
 
-# View a single song
-@app.get("/song/{song_id}")
-def view_song(song_id: int, request: Request, db: Session = Depends(get_db)):
+
+@app.get("/songs/{song_id}")
+def view_song(song_id: int, request: Request):
+    db = SessionLocal()
     song = db.query(Song).filter(Song.id == song_id).first()
-    if not song:
-        return RedirectResponse("/", status_code=303)
-    return templates.TemplateResponse("song.html", {"request": request, "song": song})
+    db.close()
+    return templates.TemplateResponse("song_detail.html", {"request": request, "song": song})
