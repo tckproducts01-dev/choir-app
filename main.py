@@ -1,5 +1,5 @@
 ﻿from fastapi import FastAPI, Request, Form
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import create_engine, Column, Integer, String, Text
@@ -73,3 +73,17 @@ def view_song(song_id: int, request: Request):
     song = db.query(Song).filter(Song.id == song_id).first()
     db.close()
     return templates.TemplateResponse("song_detail.html", {"request": request, "song": song})
+
+
+# ========================
+# Health Check Route
+# ========================
+@app.get("/health")
+def health_check():
+    try:
+        db = SessionLocal()
+        db.execute("SELECT 1")
+        db.close()
+        return JSONResponse(content={"status": "ok"})
+    except Exception as e:
+        return JSONResponse(content={"status": "error", "detail": str(e)}, status_code=500)
