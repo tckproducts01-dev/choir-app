@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ song[1] }}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }
+        h1 { margin-bottom: 20px; }
+        pre { background: #f4f4f4; padding: 15px; border-radius: 5px; white-space: pre-wrap; }
+        a { text-decoration: none; color: blue; margin-right: 15px; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>{{ song[1] }}</h1>
+
+    <pre>{{ song[2] }}</pre>
+
+    <p>
+        <a href="/admin/songs/{{ song[0] }}/edit">✏ Edit</a> |
+        <a href="/admin/songs/{{ song[0] }}/delete" onclick="return confirm('Are you sure you want to delete this song?');">🗑 Delete</a>
+    </p>
+
+    <p><a href="/admin/songs">⬅ Back to Song List</a></p>
+</body>
+</html>

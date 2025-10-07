@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>All Songs</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { margin-bottom: 20px; }
+        a { text-decoration: none; color: blue; }
+        a:hover { text-decoration: underline; }
+        li { margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <h1>All Songs</h1>
+    <ul>
+        {% for song in songs %}
+        <li>
+            <a href="/admin/songs/{{ song[0] }}">{{ song[1] }}</a>
+        </li>
+        {% endfor %}
+    </ul>
+
+    <p><a href="/">⬅ Back to Home</a></p>
+</body>
+</html>
